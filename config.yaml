@@ -1,37 +1,31 @@
 properties:
   resources:
     - resource: PSDscResources/Script
-      id: sysinfo
+      id: notepad_demo
       directives:
-        description: Collect basic system & session evidence
+        description: Open Notepad with a file (interactive demo)
         allowPrerelease: true
       settings:
         GetScript: |
-          #"state"
+          # marker – jeśli plik istnieje, uznajemy że konfiguracja już zastosowana
+          Test-Path "C:\Sample\notepad_opened.marker"
         TestScript: |
-          return $false
+          # jeżeli marker NIE istnieje → wykonaj SetScript
+          -not (Test-Path "C:\Sample\notepad_opened.marker")
         SetScript: |
           try {
             $dir = "C:\Sample"
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            $f = Join-Path $dir "sysinfo.txt"
 
-            $who = whoami /all
-            $ip  = ipconfig /all
-            $ps  = Get-Process | Select-Object -First 20 Name,Id
-            $t   = Get-Date
+            $file = Join-Path $dir "opened_by_notepad.txt"
+            "Hello from WinGet @ $(Get-Date)" | Out-File $file -Encoding UTF8
 
-            "=== SYSINFO @ $t ==="        | Out-File $f
-            "HOST: $env:COMPUTERNAME"     | Add-Content $f
-            "USER: $env:USERNAME"         | Add-Content $f
-            ""                            | Add-Content $f
-            "== WHOAMI =="                | Add-Content $f
-            $who                          | Add-Content $f
-            ""                            | Add-Content $f
-            "== IPCONFIG =="              | Add-Content $f
-            $ip                           | Add-Content $f
-            ""                            | Add-Content $f
-            "== TOP PROCESSES =="         | Add-Content $f
-            $ps | Out-String              | Add-Content $f
-          } catch { "ERROR: $($_.Exception.Message)" | Out-File "C:\Sample\sysinfo.err" }
+            # interakcja: otwórz plik w Notepadzie (widoczne okno i proces)
+            Start-Process notepad.exe -ArgumentList $file
+
+            # zostaw marker, by kolejne wywołania nic nie robiły
+            New-Item -ItemType File -Path (Join-Path $dir "notepad_opened.marker") -Force | Out-Null
+          } catch {
+            "ERROR: $($_.Exception.Message)" | Out-File (Join-Path $dir "notepad_open.err")
+          }
   configurationVersion: 0.2
