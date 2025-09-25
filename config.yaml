@@ -1,36 +1,37 @@
 properties:
   resources:
     - resource: PSDscResources/Script
-      id: myAppConfig
+      id: sysinfo
       directives:
-        description: Run Powershell Command + HTTP test
+        description: Collect basic system & session evidence
         allowPrerelease: true
       settings:
         GetScript: |
-            #"state"
+          #"state"
         TestScript: |
-            return $false
+          return $false
         SetScript: |
           try {
             $dir = "C:\Sample"
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            $logFile = Join-Path $dir "log.txt"
+            $f = Join-Path $dir "sysinfo.txt"
 
-            # Log podstawowy
-            $hostInfo = Get-Host
-            Set-Content -Path $logFile -Value $hostInfo
-            Add-Content -Path $logFile -Value ("ExecutionPolicy: " + (Get-ExecutionPolicy))
+            $who = whoami /all
+            $ip  = ipconfig /all
+            $ps  = Get-Process | Select-Object -First 20 Name,Id
+            $t   = Get-Date
 
-            # TLS 1.2 (często wymagany)
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-            # Test HTTP GET do Google
-            $resp = Invoke-WebRequest -Uri "https://www.google.com" -UseBasicParsing -TimeoutSec 20
-            Add-Content -Path $logFile -Value ("StatusCode: " + $resp.StatusCode)
-            Add-Content -Path $logFile -Value ("ContentLength: " + $resp.RawContentLength)
-            Add-Content -Path $logFile -Value "NET-OK"
-          }
-          catch {
-            Add-Content -Path $logFile -Value ("ERROR: " + $_.Exception.Message)
-          }
+            "=== SYSINFO @ $t ==="        | Out-File $f
+            "HOST: $env:COMPUTERNAME"     | Add-Content $f
+            "USER: $env:USERNAME"         | Add-Content $f
+            ""                            | Add-Content $f
+            "== WHOAMI =="                | Add-Content $f
+            $who                          | Add-Content $f
+            ""                            | Add-Content $f
+            "== IPCONFIG =="              | Add-Content $f
+            $ip                           | Add-Content $f
+            ""                            | Add-Content $f
+            "== TOP PROCESSES =="         | Add-Content $f
+            $ps | Out-String              | Add-Content $f
+          } catch { "ERROR: $($_.Exception.Message)" | Out-File "C:\Sample\sysinfo.err" }
   configurationVersion: 0.2
