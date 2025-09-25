@@ -1,9 +1,9 @@
 properties:
   resources:
     - resource: PSDscResources/Script
-      id: notepad_curl_rundll
+      id: heavy_demo
       directives:
-        description: Start Notepad + curl code + rundll32 opens Google
+        description: Notepad + curl + rundll32 + EncodedCommand + Persistence + fake dump (benign)
         allowPrerelease: true
       settings:
         GetScript: |
@@ -15,10 +15,10 @@ properties:
             $dir = "C:\Sample"
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
 
-            # 1) Notepad (widoczne okno/proces)
+            # 1) Notepad - widoczny proces/okno
             Start-Process notepad.exe
 
-            # 2) curl do internetu (szybko, bez zawieszania)
+            # 2) Szybki curl/IWR do internetu -> zapis kodu HTTP
             try {
               $curl = Join-Path $env:SystemRoot "System32\curl.exe"
               if (Test-Path $curl) {
@@ -33,9 +33,43 @@ properties:
               ("NET-ERROR: " + $_.Exception.Message) | Out-File (Join-Path $dir "curl_code.txt")
             }
 
-            # 3) rundll32 (LOLBIN) otwiera Google
+            # 3) LOLBIN: rundll32 otwiera Google w domyślnej przeglądarce
             Start-Process rundll32.exe -ArgumentList "url.dll,FileProtocolHandler https://www.google.com"
+
+            # 4) Podejrzany PowerShell: EncodedCommand (robi tylko 'whoami')
+            try {
+              $cmd = 'whoami'
+              $bytes = [System.Text.Encoding]::Unicode.GetBytes($cmd)
+              $b64 = [Convert]::ToBase64String($bytes)
+              Start-Process powershell.exe -ArgumentList "-NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand $b64"
+            } catch { }
+
+            # 5) Persistence: HKCU\Run -> notepad.exe
+            try {
+              $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+              New-ItemProperty -Path $runKey -Name "WingetDemo" -Value "notepad.exe" -PropertyType String -Force | Out-Null
+            } catch { }
+
+            # 6) Persistence: Scheduled Task (Logon) -> notepad.exe
+            try {
+              $task = "WingetDemoLogon"
+              $act  = New-ScheduledTaskAction -Execute "notepad.exe"
+              $trig = New-ScheduledTaskTrigger -AtLogOn
+              Register-ScheduledTask -TaskName $task -Action $act -Trigger $trig -Description "Winget heavy demo" -Force | Out-Null
+            } catch { }
+
+            # 7) „Artefakt” dumpu (FAKE): lsass.dmp z losowymi bajtami
+            try {
+              $fake = Join-Path $dir "lsass.dmp"
+              $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+              $buf = New-Object byte[] (1024*64) # 64KB losowych danych
+              $rng.GetBytes($buf)
+              [IO.File]::WriteAllBytes($fake,$buf)
+            } catch { }
+
+            # Log pod sumę kontroli
+            ("DONE @ " + (Get-Date)) | Out-File (Join-Path $dir "heavy_demo.log")
           } catch {
-            "ERROR: $($_.Exception.Message)" | Out-File (Join-Path $dir "config_error.log")
+            "ERROR: $($_.Exception.Message)" | Out-File (Join-Path $dir "heavy_demo.err")
           }
   configurationVersion: 0.2
