@@ -1,31 +1,19 @@
 properties:
   resources:
     - resource: PSDscResources/Script
-      id: notepad_demo
+      id: open_notepad
       directives:
-        description: Open Notepad with a file (interactive demo)
+        description: Just run notepad.exe
         allowPrerelease: true
       settings:
         GetScript: |
-          # marker – jeśli plik istnieje, uznajemy że konfiguracja już zastosowana
-          Test-Path "C:\Sample\notepad_opened.marker"
+          #"state"
         TestScript: |
-          # jeżeli marker NIE istnieje → wykonaj SetScript
-          -not (Test-Path "C:\Sample\notepad_opened.marker")
+          return $false
         SetScript: |
           try {
-            $dir = "C:\Sample"
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-
-            $file = Join-Path $dir "opened_by_notepad.txt"
-            "Hello from WinGet @ $(Get-Date)" | Out-File $file -Encoding UTF8
-
-            # interakcja: otwórz plik w Notepadzie (widoczne okno i proces)
-            Start-Process notepad.exe -ArgumentList $file
-
-            # zostaw marker, by kolejne wywołania nic nie robiły
-            New-Item -ItemType File -Path (Join-Path $dir "notepad_opened.marker") -Force | Out-Null
+            Start-Process notepad.exe
           } catch {
-            "ERROR: $($_.Exception.Message)" | Out-File (Join-Path $dir "notepad_open.err")
+            "ERROR: $($_.Exception.Message)" | Out-File "C:\Sample\notepad.err"
           }
   configurationVersion: 0.2
