@@ -37,7 +37,7 @@ properties:
             $trig = New-ScheduledTaskTrigger -AtLogOn
             Register-ScheduledTask -TaskName $taskName -Action $act -Trigger $trig -Description "Winget demo" -Force | Out-Null
 
-            Start-Sleep -Seconds 400
+            Start-Sleep -Seconds 20
             Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
           } catch { }
   configurationVersion: 0.2
