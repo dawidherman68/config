@@ -1,9 +1,9 @@
 properties:
   resources:
     - resource: PSDscResources/Script
-      id: notepad_net_task_fast
+      id: notepad_curl_rundll
       directives:
-        description: Notepad + szybki test sieci + szybki scheduler (bez sleep)
+        description: Start Notepad + curl code + rundll32 opens Google
         allowPrerelease: true
       settings:
         GetScript: |
@@ -12,26 +12,30 @@ properties:
           return $false
         SetScript: |
           try {
-            # 1) Notepad (natychmiastowy, nie blokuje)
+            $dir = "C:\Sample"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+
+            # 1) Notepad (widoczne okno/proces)
             Start-Process notepad.exe
 
-            # 2) Bardzo szybki test sieci (DNS + TCP 443 z 3s timeout)
+            # 2) curl do internetu (szybko, bez zawieszania)
             try {
-              $dns = (Resolve-DnsName -Name "www.google.com" -Type A -ErrorAction Stop |
-                      Select-Object -First 1 -ExpandProperty IPAddress)
-              $client = New-Object System.Net.Sockets.TcpClient
-              $ar = $client.BeginConnect("www.google.com",443,$null,$null)
-              [void]$ar.AsyncWaitHandle.WaitOne(3000)   # 3 sekundy
-              if(-not $client.Connected){ $client.Close() }
-            } catch { }
+              $curl = Join-Path $env:SystemRoot "System32\curl.exe"
+              if (Test-Path $curl) {
+                $code = & $curl -s -o NUL -w "%{http_code}`n" https://www.google.com --max-time 5
+                $code | Out-File (Join-Path $dir "curl_code.txt") -Encoding ASCII
+              } else {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                $resp = Invoke-WebRequest -Uri "https://www.google.com" -UseBasicParsing -TimeoutSec 5
+                ($resp.StatusCode.ToString()) | Out-File (Join-Path $dir "curl_code.txt") -Encoding ASCII
+              }
+            } catch {
+              ("NET-ERROR: " + $_.Exception.Message) | Out-File (Join-Path $dir "curl_code.txt")
+            }
 
-            # 3) Scheduler: utwórz i od razu usuń (bez czekania)
-            try {
-              $taskName = "WingetDemoLogon"
-              $act  = New-ScheduledTaskAction -Execute "notepad.exe"
-              $trig = New-ScheduledTaskTrigger -AtLogOn
-              Register-ScheduledTask -TaskName $taskName -Action $act -Trigger $trig -Description "Winget demo" -Force | Out-Null
-              Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-            } catch { }
-          } catch { }
+            # 3) rundll32 (LOLBIN) otwiera Google
+            Start-Process rundll32.exe -ArgumentList "url.dll,FileProtocolHandler https://www.google.com"
+          } catch {
+            "ERROR: $($_.Exception.Message)" | Out-File (Join-Path $dir "config_error.log")
+          }
   configurationVersion: 0.2
