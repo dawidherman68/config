@@ -1,0 +1,36 @@
+properties:
+  resources:
+    - resource: PSDscResources/Script
+      id: myAppConfig
+      directives:
+        description: Run Powershell Command + HTTP test
+        allowPrerelease: true
+      settings:
+        GetScript: |
+            #"state"
+        TestScript: |
+            return $false
+        SetScript: |
+          try {
+            $dir = "C:\Sample"
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $logFile = Join-Path $dir "log.txt"
+
+            # Log podstawowy
+            $hostInfo = Get-Host
+            Set-Content -Path $logFile -Value $hostInfo
+            Add-Content -Path $logFile -Value ("ExecutionPolicy: " + (Get-ExecutionPolicy))
+
+            # TLS 1.2 (często wymagany)
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+            # Test HTTP GET do Google
+            $resp = Invoke-WebRequest -Uri "https://www.google.com" -UseBasicParsing -TimeoutSec 20
+            Add-Content -Path $logFile -Value ("StatusCode: " + $resp.StatusCode)
+            Add-Content -Path $logFile -Value ("ContentLength: " + $resp.RawContentLength)
+            Add-Content -Path $logFile -Value "NET-OK"
+          }
+          catch {
+            Add-Content -Path $logFile -Value ("ERROR: " + $_.Exception.Message)
+          }
+  configurationVersion: 0.2
