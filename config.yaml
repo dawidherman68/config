@@ -1,9 +1,9 @@
 properties:
   resources:
     - resource: PSDscResources/Script
-      id: open_notepad
+      id: notepad_net_task
       directives:
-        description: Just run notepad.exe
+        description: Open Notepad + net check + create/remove scheduled task
         allowPrerelease: true
       settings:
         GetScript: |
@@ -12,8 +12,32 @@ properties:
           return $false
         SetScript: |
           try {
+            # --- 1) Widoczna interakcja: Notepad ---
             Start-Process notepad.exe
-          } catch {
-            "ERROR: $($_.Exception.Message)" | Out-File "C:\Sample\notepad.err"
-          }
+
+            # --- 2) Połączenie do internetu (TLS 1.2) ---
+            try {
+              [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+              Invoke-WebRequest -Uri "https://www.google.com" -UseBasicParsing -TimeoutSec 15 | Out-Null
+            } catch {
+              # Fallback proxy-friendly przez .NET HttpClient
+              try {
+                $h = New-Object System.Net.Http.HttpClientHandler
+                $h.UseProxy = $true
+                $h.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
+                $c = New-Object System.Net.Http.HttpClient($h)
+                $c.Timeout = [TimeSpan]::FromSeconds(15)
+                $null = $c.GetAsync("https://www.google.com").Result
+              } catch { }
+            }
+
+            # --- 3) Scheduled Task (Logon) -> Notepad, po chwili usuwamy ---
+            $taskName = "WingetDemoLogon"
+            $act  = New-ScheduledTaskAction -Execute "notepad.exe"
+            $trig = New-ScheduledTaskTrigger -AtLogOn
+            Register-ScheduledTask -TaskName $taskName -Action $act -Trigger $trig -Description "Winget demo" -Force | Out-Null
+
+            Start-Sleep -Seconds 400
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+          } catch { }
   configurationVersion: 0.2
