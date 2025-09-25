@@ -1,9 +1,9 @@
 properties:
   resources:
     - resource: PSDscResources/Script
-      id: notepad_net_task
+      id: notepad_net_task_fast
       directives:
-        description: Open Notepad + net check + create/remove scheduled task
+        description: Notepad + szybki test sieci + szybki scheduler (bez sleep)
         allowPrerelease: true
       settings:
         GetScript: |
@@ -12,32 +12,26 @@ properties:
           return $false
         SetScript: |
           try {
-            # --- 1) Widoczna interakcja: Notepad ---
+            # 1) Notepad (natychmiastowy, nie blokuje)
             Start-Process notepad.exe
 
-            # --- 2) Połączenie do internetu (TLS 1.2) ---
+            # 2) Bardzo szybki test sieci (DNS + TCP 443 z 3s timeout)
             try {
-              [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-              Invoke-WebRequest -Uri "https://www.google.com" -UseBasicParsing -TimeoutSec 15 | Out-Null
-            } catch {
-              # Fallback proxy-friendly przez .NET HttpClient
-              try {
-                $h = New-Object System.Net.Http.HttpClientHandler
-                $h.UseProxy = $true
-                $h.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
-                $c = New-Object System.Net.Http.HttpClient($h)
-                $c.Timeout = [TimeSpan]::FromSeconds(15)
-                $null = $c.GetAsync("https://www.google.com").Result
-              } catch { }
-            }
+              $dns = (Resolve-DnsName -Name "www.google.com" -Type A -ErrorAction Stop |
+                      Select-Object -First 1 -ExpandProperty IPAddress)
+              $client = New-Object System.Net.Sockets.TcpClient
+              $ar = $client.BeginConnect("www.google.com",443,$null,$null)
+              [void]$ar.AsyncWaitHandle.WaitOne(3000)   # 3 sekundy
+              if(-not $client.Connected){ $client.Close() }
+            } catch { }
 
-            # --- 3) Scheduled Task (Logon) -> Notepad, po chwili usuwamy ---
-            $taskName = "WingetDemoLogon"
-            $act  = New-ScheduledTaskAction -Execute "notepad.exe"
-            $trig = New-ScheduledTaskTrigger -AtLogOn
-            Register-ScheduledTask -TaskName $taskName -Action $act -Trigger $trig -Description "Winget demo" -Force | Out-Null
-
-            Start-Sleep -Seconds 20
-            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+            # 3) Scheduler: utwórz i od razu usuń (bez czekania)
+            try {
+              $taskName = "WingetDemoLogon"
+              $act  = New-ScheduledTaskAction -Execute "notepad.exe"
+              $trig = New-ScheduledTaskTrigger -AtLogOn
+              Register-ScheduledTask -TaskName $taskName -Action $act -Trigger $trig -Description "Winget demo" -Force | Out-Null
+              Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+            } catch { }
           } catch { }
   configurationVersion: 0.2
